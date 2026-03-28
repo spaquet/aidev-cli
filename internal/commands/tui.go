@@ -10,7 +10,7 @@ import (
 )
 
 // NewTUICmd creates the TUI subcommand
-func NewTUICmd() *cobra.Command {
+func NewTUICmd(version string) *cobra.Command {
 	return &cobra.Command{
 		Use:   "tui",
 		Short: "Launch the interactive TUI (default)",
@@ -23,15 +23,15 @@ func NewTUICmd() *cobra.Command {
 			}
 
 			apiClient := api.NewClient(baseURL)
-			RunTUI(apiClient, authStore, baseURL)
+			RunTUI(apiClient, authStore, baseURL, version)
 		},
 	}
 }
 
 // RunTUI launches the Bubble Tea application
 // Returns sshInstance if user initiated SSH connection
-func RunTUI(apiClient *api.Client, authStore *auth.Store, baseURL string) *models.Instance {
-	appModel := tui.NewAppModel(baseURL, apiClient, authStore)
+func RunTUI(apiClient *api.Client, authStore *auth.Store, baseURL string, version string) *models.Instance {
+	appModel := tui.NewAppModel(baseURL, apiClient, authStore, version)
 
 	p := tea.NewProgram(appModel, tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {

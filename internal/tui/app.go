@@ -19,6 +19,7 @@ const (
 type AppModel struct {
 	screen      Screen
 	baseURL     string
+	version     string
 	token       string
 	config      *models.Config
 	apiClient   *api.Client
@@ -33,11 +34,12 @@ type AppModel struct {
 }
 
 // NewAppModel creates the root app model
-func NewAppModel(baseURL string, apiClient *api.Client, authStore *auth.Store) *AppModel {
+func NewAppModel(baseURL string, apiClient *api.Client, authStore *auth.Store, version string) *AppModel {
 	return &AppModel{
 		baseURL:   baseURL,
 		apiClient: apiClient,
 		authStore: authStore,
+		version:   version,
 		screen:    ScreenLogin,
 	}
 }
@@ -51,7 +53,7 @@ func (m *AppModel) Init() tea.Cmd {
 			// Log error but continue
 		}
 		// No config, show login
-		m.loginView = views.NewLoginModel(m.apiClient, m.baseURL)
+		m.loginView = views.NewLoginModel(m.apiClient, m.baseURL, m.version)
 		m.screen = ScreenLogin
 		return m.loginView.Init()
 	}
@@ -99,7 +101,7 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			// Refresh failed, go to login
 			m.screen = ScreenLogin
-			m.loginView = views.NewLoginModel(m.apiClient, m.baseURL)
+			m.loginView = views.NewLoginModel(m.apiClient, m.baseURL, m.version)
 			return m, m.loginView.Init()
 		}
 		// Refresh succeeded

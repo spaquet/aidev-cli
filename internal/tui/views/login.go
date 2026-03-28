@@ -16,7 +16,8 @@ import (
 type LoginState int
 
 const (
-	LoginStateInitiating LoginState = iota
+	LoginStateWelcome    LoginState = iota
+	LoginStateInitiating
 	LoginStateWaiting
 	LoginStateError
 )
@@ -24,6 +25,7 @@ const (
 type LoginModel struct {
 	client         *api.Client
 	baseURL        string
+	version        string
 	width          int
 	height         int
 	state          LoginState
@@ -56,16 +58,17 @@ type LoginSuccessMsg struct {
 }
 
 // NewLoginModel creates a new login view
-func NewLoginModel(client *api.Client, baseURL string) *LoginModel {
+func NewLoginModel(client *api.Client, baseURL string, version string) *LoginModel {
 	return &LoginModel{
 		client:  client,
 		baseURL: baseURL,
-		state:   LoginStateInitiating,
+		version: version,
+		state:   LoginStateWelcome,
 	}
 }
 
 func (m *LoginModel) Init() tea.Cmd {
-	return m.initiateDeviceLogin()
+	return nil
 }
 
 func (m *LoginModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -74,8 +77,13 @@ func (m *LoginModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "ctrl+c", "esc":
 			return m, tea.Quit
-		case "enter":
-			// Allow retry on error
+		case "enter", " ":
+			// Welcome state: start login
+			if m.state == LoginStateWelcome {
+				m.state = LoginStateInitiating
+				return m, m.initiateDeviceLogin()
+			}
+			// Error state: allow retry
 			if m.state == LoginStateError {
 				m.state = LoginStateInitiating
 				m.errorMsg = ""
@@ -137,22 +145,19 @@ func (m *LoginModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m *LoginModel) View() string {
 	var sb strings.Builder
 
-	// Title
-	title := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(ColorFg).
-		MarginBottom(2).
-		Render("AIDev Login")
-
-	sb.WriteString(title)
-	sb.WriteString("\n")
-
 	switch m.state {
+	case LoginStateWelcome:
+		return m.renderWelcome()
+
 	case LoginStateInitiating:
+		sb.WriteString("AIDev Login")
+		sb.WriteString("\n\n")
 		sb.WriteString(StyleHint.Render("Initiating browser authentication..."))
 		sb.WriteString("\n\n")
 
 	case LoginStateWaiting:
+		sb.WriteString("AIDev Login")
+		sb.WriteString("\n\n")
 		sb.WriteString(StyleHint.Render("Opening browser for authentication..."))
 		sb.WriteString("\n\n")
 
@@ -170,6 +175,8 @@ func (m *LoginModel) View() string {
 		sb.WriteString("\n")
 
 	case LoginStateError:
+		sb.WriteString("AIDev Login")
+		sb.WriteString("\n\n")
 		sb.WriteString(StyleError.Render("Error: " + m.errorMsg))
 		sb.WriteString("\n\n")
 		sb.WriteString(StyleHint.Render("[Enter] Retry  [Ctrl+C] Exit"))
@@ -183,6 +190,77 @@ func (m *LoginModel) View() string {
 }
 
 // Private methods
+
+func (m *LoginModel) renderWelcome() string {
+	var sb strings.Builder
+
+	// App name in large spaced letters with sky blue color
+	appName := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("#87CEEB")).
+		Render("A I D E V")
+
+	sb.WriteString(appName)
+	sb.WriteString("\n")
+
+	// Subtitle
+	subtitle := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(ColorFg).
+		Render("AI Development Sandbox")
+
+	sb.WriteString(subtitle)
+	sb.WriteString("\n")
+
+	// Version
+	versionStr := lipgloss.NewStyle().
+		Foreground(ColorDimmed).
+		Render("v" + m.version)
+
+	sb.WriteString(versionStr)
+	sb.WriteString("\n\n")
+
+	// Separator
+	separator := strings.Repeat("─", 45)
+	sb.WriteString(StyleHint.Render(separator))
+	sb.WriteString("\n\n")
+
+	// Marketing copy
+	marketing := `Cloud workstations for AI-assisted development.
+
+Pre-loaded with Claude Code, Codex, and
+developer tools. SSH in from anywhere.
+Spin up new instances in minutes.`
+
+	sb.WriteString(StyleHint.Render(marketing))
+	sb.WriteString("\n\n")
+
+	// Separator
+	sb.WriteString(StyleHint.Render(separator))
+	sb.WriteString("\n\n")
+
+	// Button
+	button := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("#87CEEB")).
+		Padding(0, 4).
+		Bold(true).
+		Foreground(lipgloss.Color("#87CEEB")).
+		Render("Sign in with browser")
+
+	// Center the button
+	buttonPadded := lipgloss.NewStyle().
+		Align(lipgloss.Center).
+		Render(button)
+
+	sb.WriteString(buttonPadded)
+	sb.WriteString("\n\n")
+
+	// Footer hints
+	sb.WriteString(StyleHint.Render("[Enter] Sign in  [Ctrl+C] Exit"))
+
+	return StyleBorderBox.Render(sb.String())
+}
 
 func (m *LoginModel) initiateDeviceLogin() tea.Cmd {
 	return func() tea.Msg {

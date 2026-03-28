@@ -31,7 +31,7 @@ func main() {
 	rootCmd.PersistentFlags().StringVar(&baseURL, "api", baseURL, "API base URL")
 
 	// Subcommands
-	rootCmd.AddCommand(commands.NewTUICmd())
+	rootCmd.AddCommand(commands.NewTUICmd(version))
 	rootCmd.AddCommand(commands.NewLoginCmd())
 	rootCmd.AddCommand(commands.NewSSHCmd())
 	rootCmd.AddCommand(commands.NewForwardCmd())
@@ -53,7 +53,7 @@ func launchTUI(baseURL string) {
 	}
 
 	apiClient := api.NewClient(baseURL)
-	sshInstance := commands.RunTUI(apiClient, authStore, baseURL)
+	sshInstance := commands.RunTUI(apiClient, authStore, baseURL, version)
 
 	// If user initiated SSH connection, handle it
 	if sshInstance != nil {
