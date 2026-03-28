@@ -14,54 +14,59 @@ The AIDev CLI TUI is a terminal user interface for managing AI Dev Sandbox insta
 
 ## Screen Architecture
 
-### 1. Login Screen
+### 1. Login Screen (Device Flow)
 
-**Purpose:** Authenticate and store a session token.
+**Purpose:** Authenticate via browser and store a session token.
 
 **Layout:**
 ```
 ┌────────────────────────────────────────┐
 │                                        │
-│     🔐 AI Dev Sandbox Login            │
+│     AIDev Login                        │
 │                                        │
-│     ────────────────────────────────  │
+│     Opening browser for              │
+│     authentication...                 │
 │                                        │
-│     Email:                             │
-│     [alice@example.com__________]      │
+│     Code:                              │
+│     AIDEV-WXYZ                        │
 │                                        │
-│     Password:                          │
-│     [••••••••••••••__________]          │
+│     Or visit:                          │
+│     https://app.aidev.io/device       │
 │                                        │
-│     ────────────────────────────────  │
+│     Waiting for authorization...      │
 │                                        │
-│     Or paste an API key:               │
-│     [aidev_sk_abc123__________]        │
-│                                        │
-│     ────────────────────────────────  │
-│                                        │
-│     [Enter] Sign in   [Tab] Next field │
-│     [Ctrl+C] Exit                      │
+│     [Ctrl+C] Cancel                    │
 │                                        │
 └────────────────────────────────────────┘
 ```
 
-**Fields:**
-- Email or API key (mutually exclusive)
-- Password (hidden, only if email chosen)
+**Flow:**
+1. TUI calls `POST /api/v1/auth/device`
+2. Display `user_code` (e.g., `AIDEV-WXYZ`) to user
+3. Automatically open `verification_uri` in default browser
+4. Poll `POST /api/v1/auth/device/token` every 5 seconds
+5. On 200 OK: token received, store in config.json, transition to MainScreen
+6. On 428: still waiting, continue polling
+7. On 400: error (code expired or denied), show error, allow retry
 
 **Interactions:**
-- `Tab` — cycle through fields
-- `Enter` — submit login
+- Automatic browser opening (no user action needed)
 - `Ctrl+C` — quit
+- `Enter` (on error) — retry
 
-**API call:**
+**API calls:**
 ```
-POST /api/v1/auth/login
-Body: { email, password }  OR  { api_key }
+POST /api/v1/auth/device → { device_code, user_code, verification_uri }
+
+POST /api/v1/auth/device/token (polling)
+Body: { device_code }
+→ 200: { token, expires_at, user } → success
+→ 428: { error: "authorization_pending" } → keep polling
+→ 400: { error: "expired_token" } or "access_denied" → show error
 ```
 
 **Success:** Store token in config.json, transition to MainScreen.
-**Error:** Show red error banner, stay on LoginScreen.
+**Error:** Show error message, allow retry with [Enter].
 
 ---
 
@@ -381,8 +386,9 @@ This pattern is used by k9s, lazygit, and other mature TUIs.
 - No response → show toast "Network timeout" after 30 seconds
 
 **User errors:**
-- Invalid email/password → show red banner "Invalid credentials"
-- Malformed API key → show red banner "Invalid API key format"
+- Device code expired → show red banner "Device code expired. Please try again."
+- User denied authorization → show red banner "Authorization denied."
+- Device initialization failed → show red banner "Failed to initiate login"
 
 ---
 

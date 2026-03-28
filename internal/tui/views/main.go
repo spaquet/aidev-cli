@@ -107,7 +107,7 @@ func (m *MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if selected != nil {
 				m.modal = ModalConfirmDelete
 				m.confirmDialog = NewConfirmDialog(
-					"⚠️  Delete Instance?",
+					"Delete Instance?",
 					fmt.Sprintf("Are you sure you want to permanently delete %q?\nAll data will be lost.", selected.Name),
 				)
 				return m, m.confirmDialog.Init()

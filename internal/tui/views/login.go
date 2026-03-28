@@ -2,84 +2,70 @@ package views
 
 import (
 	"fmt"
+	"os/exec"
+	"runtime"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/aidev/cli/internal/api"
 )
 
-type LoginModel struct {
-	client       *api.Client
-	baseURL      string
-	width        int
-	height       int
-	mode         LoginMode // email or apikey
-	email        textinput.Model
-	password     textinput.Model
-	apiKey       textinput.Model
-	errorMsg     string
-	loading      bool
-	focusIndex   int
-	fields       []interface{} // Current mode's fields
-}
-
-type LoginMode int
+// LoginState represents the current state of the device flow
+type LoginState int
 
 const (
-	LoginModeEmail LoginMode = iota
-	LoginModeAPIKey
+	LoginStateInitiating LoginState = iota
+	LoginStateWaiting
+	LoginStateError
 )
+
+type LoginModel struct {
+	client         *api.Client
+	baseURL        string
+	width          int
+	height         int
+	state          LoginState
+	deviceCode     string
+	userCode       string
+	verificationURI string
+	pollInterval   int
+	errorMsg       string
+	lastError      error
+}
+
+// Message types
+type deviceCodeMsg struct {
+	DeviceCode      string
+	UserCode        string
+	VerificationURI string
+	Interval        int
+}
+
+type devicePollResultMsg struct {
+	Token string
+	Err   error
+}
+
+type loginErrorMsg string
 
 // LoginSuccessMsg is sent when login succeeds
 type LoginSuccessMsg struct {
 	Token string
 }
 
-type loginErrorMsg string
-
 // NewLoginModel creates a new login view
 func NewLoginModel(client *api.Client, baseURL string) *LoginModel {
-	email := textinput.New()
-	email.Placeholder = "alice@example.com"
-	email.CharLimit = 254
-
-	password := textinput.New()
-	password.Placeholder = "••••••••"
-	password.EchoCharacter = '•'
-	password.EchoMode = textinput.EchoPassword
-
-	apiKey := textinput.New()
-	apiKey.Placeholder = "aidev_sk_..."
-	apiKey.CharLimit = 100
-
-	m := &LoginModel{
-		client:    client,
-		baseURL:   baseURL,
-		mode:      LoginModeEmail,
-		email:     email,
-		password:  password,
-		apiKey:    apiKey,
-		focusIndex: 0,
-	}
-
-	m.updateFields()
-	m.email.Focus()
-
-	return m
-}
-
-func (m *LoginModel) updateFields() {
-	if m.mode == LoginModeEmail {
-		m.fields = []interface{}{&m.email, &m.password}
-	} else {
-		m.fields = []interface{}{&m.apiKey}
+	return &LoginModel{
+		client:  client,
+		baseURL: baseURL,
+		state:   LoginStateInitiating,
 	}
 }
 
 func (m *LoginModel) Init() tea.Cmd {
-	return textinput.Blink
+	return m.initiateDeviceLogin()
 }
 
 func (m *LoginModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -88,43 +74,56 @@ func (m *LoginModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "ctrl+c", "esc":
 			return m, tea.Quit
-
-		case "tab":
-			m.focusIndex = (m.focusIndex + 1) % len(m.fields)
-			m.updateFocus()
-			return m, nil
-
-		case "shift+tab":
-			m.focusIndex = (m.focusIndex - 1 + len(m.fields)) % len(m.fields)
-			m.updateFocus()
-			return m, nil
-
 		case "enter":
-			if m.loading {
-				return m, nil
-			}
-			m.loading = true
-			m.errorMsg = ""
-
-			if m.mode == LoginModeEmail {
-				return m, m.attemptEmailLogin()
-			} else {
-				return m, m.attemptAPIKeyLogin()
+			// Allow retry on error
+			if m.state == LoginStateError {
+				m.state = LoginStateInitiating
+				m.errorMsg = ""
+				m.lastError = nil
+				return m, m.initiateDeviceLogin()
 			}
 		}
 
-	case LoginSuccessMsg:
-		// Login succeeded; signal parent to transition
-		m.loading = false
+	case deviceCodeMsg:
+		m.deviceCode = msg.DeviceCode
+		m.userCode = msg.UserCode
+		m.verificationURI = msg.VerificationURI
+		m.pollInterval = msg.Interval
+		m.state = LoginStateWaiting
+		m.errorMsg = ""
+
+		// Open browser
+		openBrowser(m.verificationURI)
+
+		// Start polling
+		return m, m.pollDeviceAuth()
+
+	case devicePollResultMsg:
+		if msg.Err != nil {
+			if api.IsAuthorizationPending(msg.Err) {
+				// Still waiting, schedule next poll
+				return m, m.pollDeviceAuth()
+			}
+			// Error
+			m.state = LoginStateError
+			m.lastError = msg.Err
+			m.errorMsg = formatDeviceError(msg.Err)
+			return m, nil
+		}
+		// Success
 		return m, func() tea.Msg {
-			// Signal parent to handle login success
+			return LoginSuccessMsg{Token: msg.Token}
+		}
+
+	case LoginSuccessMsg:
+		// Re-emit upward
+		return m, func() tea.Msg {
 			return msg
 		}
 
 	case loginErrorMsg:
+		m.state = LoginStateError
 		m.errorMsg = string(msg)
-		m.loading = false
-		m.password.SetValue("") // Clear password on error
 		return m, nil
 
 	case tea.WindowSizeMsg:
@@ -132,23 +131,10 @@ func (m *LoginModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 	}
 
-	// Update focused field
-	if m.focusIndex < len(m.fields) {
-		if input, ok := m.fields[m.focusIndex].(*textinput.Model); ok {
-			var cmd tea.Cmd
-			*input, cmd = input.Update(msg)
-			return m, cmd
-		}
-	}
-
 	return m, nil
 }
 
 func (m *LoginModel) View() string {
-	return m.render()
-}
-
-func (m *LoginModel) render() string {
 	var sb strings.Builder
 
 	// Title
@@ -156,120 +142,97 @@ func (m *LoginModel) render() string {
 		Bold(true).
 		Foreground(ColorFg).
 		MarginBottom(2).
-		Render("🔐 AIDev Login")
+		Render("AIDev Login")
 
 	sb.WriteString(title)
 	sb.WriteString("\n")
 
-	// Mode indicator
-	modeEmail := "Email"
-	modeAPIKey := "API Key"
-	if m.mode == LoginModeEmail {
-		modeEmail = StyleSuccess.Render(modeEmail)
-	} else {
-		modeAPIKey = StyleSuccess.Render(modeAPIKey)
-	}
+	switch m.state {
+	case LoginStateInitiating:
+		sb.WriteString(StyleHint.Render("Initiating browser authentication..."))
+		sb.WriteString("\n\n")
 
-	sb.WriteString(modeEmail)
-	sb.WriteString(" • ")
-	sb.WriteString(modeAPIKey)
-	sb.WriteString("\n\n")
+	case LoginStateWaiting:
+		sb.WriteString(StyleHint.Render("Opening browser for authentication..."))
+		sb.WriteString("\n\n")
 
-	// Form fields
-	if m.mode == LoginModeEmail {
-		sb.WriteString(StyleLabel.Render("Email:"))
+		sb.WriteString(StyleLabel.Render("Code:"))
 		sb.WriteString("\n")
-		sb.WriteString(m.email.View())
+		sb.WriteString(StyleSuccess.Render("  " + m.userCode))
 		sb.WriteString("\n\n")
 
-		sb.WriteString(StyleLabel.Render("Password:"))
+		sb.WriteString(StyleLabel.Render("Or visit:"))
 		sb.WriteString("\n")
-		sb.WriteString(m.password.View())
+		sb.WriteString(StyleLink.Render("  " + m.verificationURI))
 		sb.WriteString("\n\n")
-	} else {
-		sb.WriteString(StyleLabel.Render("API Key:"))
+
+		sb.WriteString(StyleWarning.Render("Waiting for authorization..."))
 		sb.WriteString("\n")
-		sb.WriteString(m.apiKey.View())
+
+	case LoginStateError:
+		sb.WriteString(StyleError.Render("Error: " + m.errorMsg))
 		sb.WriteString("\n\n")
+		sb.WriteString(StyleHint.Render("[Enter] Retry  [Ctrl+C] Exit"))
+		sb.WriteString("\n")
 	}
 
-	// Error message
-	if m.errorMsg != "" {
-		sb.WriteString(StyleError.Render("❌ " + m.errorMsg))
-		sb.WriteString("\n\n")
-	}
-
-	// Loading
-	if m.loading {
-		sb.WriteString(StyleWarning.Render("⏳ Logging in..."))
-		sb.WriteString("\n\n")
-	}
-
-	// Instructions
-	sb.WriteString(StyleHint.Render("[Tab] Next field • [Enter] Sign in • [Ctrl+C] Exit"))
+	sb.WriteString("\n")
+	sb.WriteString(StyleHint.Render("[Ctrl+C] Cancel"))
 
 	return StyleBorderBox.Render(sb.String())
 }
 
-func (m *LoginModel) updateFocus() {
-	m.email.Blur()
-	m.password.Blur()
-	m.apiKey.Blur()
+// Private methods
 
-	if m.focusIndex < len(m.fields) {
-		if input, ok := m.fields[m.focusIndex].(*textinput.Model); ok {
-			input.Focus()
+func (m *LoginModel) initiateDeviceLogin() tea.Cmd {
+	return func() tea.Msg {
+		resp, err := m.client.DeviceAuthorize()
+		if err != nil {
+			return loginErrorMsg(fmt.Sprintf("Failed to initiate login: %v", err))
+		}
+
+		return deviceCodeMsg{
+			DeviceCode:      resp.DeviceCode,
+			UserCode:        resp.UserCode,
+			VerificationURI: resp.VerificationURI,
+			Interval:        resp.Interval,
 		}
 	}
 }
 
-func (m *LoginModel) attemptEmailLogin() tea.Cmd {
-	email := strings.TrimSpace(m.email.Value())
-	password := m.password.Value()
+func (m *LoginModel) pollDeviceAuth() tea.Cmd {
+	deviceCode := m.deviceCode
+	interval := m.pollInterval
 
-	if email == "" || password == "" {
-		return func() tea.Msg {
-			return loginErrorMsg("Email and password are required")
-		}
-	}
-
-	return func() tea.Msg {
-		resp, err := m.client.Login(email, password, "")
+	return tea.Tick(time.Duration(interval)*time.Second, func(t time.Time) tea.Msg {
+		resp, err := m.client.DevicePoll(deviceCode)
 		if err != nil {
-			if api.IsUnauthorized(err) {
-				return loginErrorMsg("Invalid email or password")
-			}
-			return loginErrorMsg(fmt.Sprintf("Login failed: %v", err))
+			return devicePollResultMsg{Err: err}
 		}
 
-		return LoginSuccessMsg{Token: resp.Token}
+		return devicePollResultMsg{Token: resp.Token}
+	})
+}
+
+func openBrowser(url string) {
+	switch runtime.GOOS {
+	case "darwin":
+		exec.Command("open", url).Start()
+	case "linux":
+		exec.Command("xdg-open", url).Start()
+	case "windows":
+		exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
 	}
 }
 
-func (m *LoginModel) attemptAPIKeyLogin() tea.Cmd {
-	apiKey := strings.TrimSpace(m.apiKey.Value())
-
-	if apiKey == "" {
-		return func() tea.Msg {
-			return loginErrorMsg("API key is required")
+func formatDeviceError(err error) string {
+	if httpErr, ok := err.(*api.HTTPError); ok {
+		if strings.Contains(httpErr.Body, "expired_token") {
+			return "Device code expired. Please try again."
+		}
+		if strings.Contains(httpErr.Body, "access_denied") {
+			return "Authorization denied."
 		}
 	}
-
-	if !strings.HasPrefix(apiKey, "aidev_sk_") {
-		return func() tea.Msg {
-			return loginErrorMsg("API key must start with 'aidev_sk_'")
-		}
-	}
-
-	return func() tea.Msg {
-		resp, err := m.client.Login("", "", apiKey)
-		if err != nil {
-			if api.IsUnauthorized(err) {
-				return loginErrorMsg("Invalid API key")
-			}
-			return loginErrorMsg(fmt.Sprintf("Login failed: %v", err))
-		}
-
-		return LoginSuccessMsg{Token: resp.Token}
-	}
+	return fmt.Sprintf("%v", err)
 }

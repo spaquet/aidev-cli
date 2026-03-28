@@ -124,10 +124,10 @@ func (m *InstanceListModel) View() string {
 	header := lipgloss.NewStyle().
 		Foreground(ColorFg).
 		Bold(true).
-		Render(fmt.Sprintf("📦 Instances (%d)", len(m.instances)))
+		Render(fmt.Sprintf("Instances (%d)", len(m.instances)))
 
 	if m.loading {
-		header += " ⟳ Loading..."
+		header += " Loading..."
 	} else if m.lastSync.Year() > 1 {
 		syncTime := time.Since(m.lastSync)
 		header += fmt.Sprintf(" (synced %v ago)", syncTime.Round(time.Second))
@@ -138,7 +138,7 @@ func (m *InstanceListModel) View() string {
 
 	// Error message
 	if m.errorMsg != "" {
-		sb.WriteString(StyleError.Render("❌ " + m.errorMsg))
+		sb.WriteString(StyleError.Render("Error: " + m.errorMsg))
 		sb.WriteString("\n\n")
 	}
 

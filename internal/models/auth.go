@@ -32,6 +32,20 @@ type RefreshResponse struct {
 	ExpiresAt string `json:"expires_at"`
 }
 
+// DeviceAuthResponse is returned from auth/device
+type DeviceAuthResponse struct {
+	DeviceCode      string `json:"device_code"`
+	UserCode        string `json:"user_code"`
+	VerificationURI string `json:"verification_uri"`
+	ExpiresIn       int    `json:"expires_in"`
+	Interval        int    `json:"interval"`
+}
+
+// DevicePollRequest is sent to auth/device/token
+type DevicePollRequest struct {
+	DeviceCode string `json:"device_code"`
+}
+
 // Config represents the stored configuration file
 type Config struct {
 	BaseURL        string `json:"base_url"`

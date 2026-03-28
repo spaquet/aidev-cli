@@ -99,16 +99,16 @@ func (nm *NotificationManager) renderNotification(notif Notification) string {
 
 	switch notif.Type {
 	case NotificationSuccess:
-		prefix = "✅"
+		prefix = "[OK]"
 		style = StyleSuccess
 	case NotificationWarning:
-		prefix = "⚠️ "
+		prefix = "[!]"
 		style = StyleWarning
 	case NotificationError:
-		prefix = "❌"
+		prefix = "[ERROR]"
 		style = StyleError
 	default:
-		prefix = "ℹ️ "
+		prefix = "[i]"
 		style = lipgloss.NewStyle().Foreground(lipgloss.Color("#87CEEB"))
 	}
 

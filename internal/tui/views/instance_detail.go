@@ -181,7 +181,7 @@ func (m *InstanceDetailModel) renderDetail() string {
 
 	// Disable actions based on status
 	if inst.Status != "running" {
-		actions = append([]string{"⚠️  Instance is not running"}, actions...)
+		actions = append([]string{"Instance is not running"}, actions...)
 	}
 
 	sb.WriteString(renderSection("Actions", actions))
@@ -196,7 +196,7 @@ func renderSection(title string, items []string) string {
 	sectionTitle := lipgloss.NewStyle().
 		Bold(true).
 		Foreground(lipgloss.Color("#87CEEB")).
-		Render("▸ " + title)
+		Render("> " + title)
 
 	sb.WriteString(sectionTitle)
 	sb.WriteString("\n")

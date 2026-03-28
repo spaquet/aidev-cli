@@ -106,7 +106,7 @@ func (m *ForwardModalModel) View() string {
 	sb.WriteString(lipgloss.NewStyle().
 		Bold(true).
 		Foreground(ColorFg).
-		Render("🔗 Local Port Forwarding"))
+		Render("Local Port Forwarding"))
 	sb.WriteString("\n\n")
 
 	sb.WriteString(StyleLabel.Render("Local port (on your machine):"))
@@ -122,7 +122,7 @@ func (m *ForwardModalModel) View() string {
 	sb.WriteString(StyleHint.Render("Forward localhost:LOCAL → VM:REMOTE"))
 	sb.WriteString("\n\n")
 
-	sb.WriteString(StyleWarning.Render("⚠️  Port forwarding runs in background"))
+	sb.WriteString(StyleWarning.Render("Port forwarding runs in background"))
 	sb.WriteString("\n")
 	sb.WriteString(StyleHint.Render("Press [F] to stop forwarding"))
 	sb.WriteString("\n\n")

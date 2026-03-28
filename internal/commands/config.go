@@ -52,7 +52,7 @@ func NewConfigCmd() *cobra.Command {
 				return fmt.Errorf("failed to delete config: %w", err)
 			}
 
-			fmt.Println("✅ Logged out")
+			fmt.Println("Logged out")
 			return nil
 		},
 	})

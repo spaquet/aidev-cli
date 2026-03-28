@@ -78,7 +78,7 @@ func handleUpdate() error {
 	// Clean up backup
 	os.Remove(backupPath)
 
-	fmt.Printf("✓ Successfully updated to version %s\n", latestVersion)
+	fmt.Printf("Successfully updated to version %s\n", latestVersion)
 	return nil
 }
 

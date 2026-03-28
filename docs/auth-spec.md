@@ -7,21 +7,30 @@ This document describes how authentication works between the `aidev` CLI/TUI and
 ## Architecture Overview
 
 ```
-┌──────────────┐                              ┌──────────────────┐
-│              │  POST /auth/login            │                  │
-│   aidev      │  (email + password)          │   Rails API      │
-│   (CLI/TUI)  │  ───────────────────────────>│   (JWT provider) │
-│              │                              │                  │
-│              │  <───────────────────────────│                  │
-│              │  { token, expires_at, user } │                  │
-│              │                              │                  │
-│  ┌──────────┐│  GET /instances              │                  │
-│  │config.json │  Header: Authorization: Bearer <token>        │
-│  └──────────┘│  ───────────────────────────>│                  │
-│              │                              │                  │
-│              │  <───────────────────────────│                  │
-│              │  [...instances]              │                  │
-│              │                              │                  │
+┌──────────────┐  POST /api/v1/auth/device     ┌──────────────────┐
+│              │  ────────────────────────────> │                  │
+│   aidev      │  { device_code, user_code,    │   Rails API      │
+│   (CLI/TUI)  │    verification_uri }         │   (JWT provider) │
+│              │  <──────────────────────────── │                  │
+│              │                                │                  │
+│              │  ┌─ Opens browser ──┐          │                  │
+│              │  │ (auto-opens URL)│          │                  │
+│              │  └─────────────────┘          │                  │
+│              │                                │                  │
+│              │  POST /api/v1/auth/device/token (polling)         │
+│              │  ────────────────────────────> │                  │
+│              │  { device_code }               │                  │
+│              │                                │                  │
+│              │  <──────────────────────────── │                  │
+│              │  { token, expires_at, user }   │                  │
+│              │                                │                  │
+│  ┌──────────┐│  GET /instances                │                  │
+│  │config.json │  Header: Authorization: Bearer <token>          │
+│  └──────────┘│  ───────────────────────────> │                  │
+│              │                                │                  │
+│              │  <─────────────────────────── │                  │
+│              │  [...instances]                │                  │
+│              │                                │                  │
 └──────────────┘                              └──────────────────┘
 ```
 
@@ -125,22 +134,55 @@ Authorization: Bearer eyJhbGci...
   - If refresh succeeds → retry original request with new token
   - If refresh fails → delete config.json, show LoginScreen
 
-### 4. Login Flow
+### 4. Device Flow Login
 
-**User action:** Enter email + password (or API key) on LoginScreen.
+**User action:** Start TUI or `aidev login` — opens browser for authentication.
+
+**Step 1: Initiate device authorization**
 
 **Request:**
 ```
-POST /api/v1/auth/login
+POST /api/v1/auth/device
 Content-Type: application/json
-
-{
-  "email": "alice@example.com",
-  "password": "correct-horse-battery-staple"
-}
+(empty body)
 ```
 
 **Response (200):**
+```json
+{
+  "device_code": "dev_abc123xyz456...",
+  "user_code": "AIDEV-WXYZ",
+  "verification_uri": "https://app.aidev.io/device",
+  "expires_in": 300,
+  "interval": 5
+}
+```
+
+**Step 2: Display code and open browser**
+
+The TUI/CLI displays:
+```
+Code: AIDEV-WXYZ
+Visit: https://app.aidev.io/device
+```
+
+And automatically opens the verification URL in the default browser.
+
+**Step 3: Poll for completion**
+
+Every `interval` seconds (5 by default), the CLI polls:
+
+**Request:**
+```
+POST /api/v1/auth/device/token
+Content-Type: application/json
+
+{
+  "device_code": "dev_abc123xyz456..."
+}
+```
+
+**Response (200) — Authorized:**
 ```json
 {
   "token": "eyJhbGci...",
@@ -153,13 +195,34 @@ Content-Type: application/json
 }
 ```
 
-**On success:**
-1. Write token, expires_at, base_url to `config.json` (file mode 0600)
-2. Navigate to MainScreen
+**Response (428) — Still waiting:**
+```json
+{
+  "error": "authorization_pending"
+}
+```
 
-**On failure (401):**
-1. Show red error banner: "Invalid email or password"
-2. Stay on LoginScreen (clear password field)
+**Response (400) — Code expired or denied:**
+```json
+{
+  "error": "expired_token"
+}
+```
+or
+```json
+{
+  "error": "access_denied"
+}
+```
+
+**On success (200):**
+1. Write token, expires_at, base_url to `config.json` (file mode 0600)
+2. Navigate to MainScreen (TUI) or exit with confirmation (CLI)
+
+**On error (400/428/timeout):**
+1. Show error message ("Code expired", "Access denied", etc.)
+2. TUI: Allow retry with [Enter]
+3. CLI: Exit with error, user can retry `aidev login`
 
 ### 5. Logout
 
@@ -243,77 +306,6 @@ token, err := keyring.Get("aidev", email)
 
 ---
 
-## API Key Authentication
-
-Users can create static API keys for non-interactive use (scripts, CI/CD).
-
-### Key Format
-
-API keys are prefixed with `aidev_sk_` followed by a 32-character secret:
-
-```
-aidev_sk_abc123def456ghi789jkl012mnop
-```
-
-### Creation (via web dashboard)
-
-1. User logs in to dashboard
-2. Navigate to Settings → API Keys
-3. Click "Create new key"
-4. Provide optional label and expiration (default: never)
-5. Show key once, then hide
-
-Key is stored hashed (bcrypt) in the `api_keys` table:
-```sql
-CREATE TABLE api_keys (
-  id BIGINT PRIMARY KEY,
-  user_id BIGINT NOT NULL FOREIGN KEY,
-  key_hash VARCHAR NOT NULL UNIQUE,
-  label VARCHAR,
-  last_used_at TIMESTAMP,
-  expires_at TIMESTAMP,
-  created_at TIMESTAMP,
-  updated_at TIMESTAMP
-);
-```
-
-### Usage in TUI
-
-User can log in with an API key instead of password:
-
-**LoginScreen option:**
-```
-Email: [alice@example.com__________]
-Or paste an API key: [aidev_sk_abc123__________]
-```
-
-**Request:**
-```
-POST /api/v1/auth/login
-Content-Type: application/json
-
-{ "api_key": "aidev_sk_abc123..." }
-```
-
-**Backend behavior:**
-1. Extract prefix: should start with `aidev_sk_`
-2. Lookup key hash in `api_keys` table (compare hashed value)
-3. If found, issue JWT for the associated user_id
-4. Update `last_used_at` timestamp
-5. Return token + user info (same as password auth)
-
-### CLI Usage (non-TUI)
-
-Users can also set environment variable:
-```bash
-export AIDEV_TOKEN=aidev_sk_abc123...
-aidev instances list
-```
-
-The API client uses env var if present, else reads from config.json.
-
----
-
 ## Rails Implementation Notes
 
 ### Gems Required
@@ -321,13 +313,49 @@ The API client uses env var if present, else reads from config.json.
 ```ruby
 # Gemfile
 gem 'jwt'  # or 'json-jwt'
-gem 'bcrypt'  # password hashing
-gem 'doorkeeper'  # optional: OAuth2 support for future
+gem 'securerandom'  # for device code generation
 ```
 
-### Minimal JWT Implementation
+### Device Flow Implementation
 
 ```ruby
+# db/migrate/xxx_create_device_authorizations.rb
+create_table :device_authorizations do |t|
+  t.string :device_code, null: false, index: { unique: true }
+  t.string :user_code, null: false
+  t.bigint :user_id, null: true, foreign_key: true
+  t.datetime :expires_at, null: false
+  t.datetime :approved_at, null: true
+  t.string :status, default: 'pending'  # pending, approved, denied, expired
+  t.timestamps
+end
+
+# app/models/device_authorization.rb
+class DeviceAuthorization < ApplicationRecord
+  belongs_to :user, optional: true
+
+  DEVICE_CODE_LENGTH = 32
+  USER_CODE_LENGTH = 8
+  EXPIRES_IN = 300  # 5 minutes
+  INTERVAL = 5     # seconds
+
+  def self.create_authorization
+    create!(
+      device_code: SecureRandom.hex(DEVICE_CODE_LENGTH / 2),
+      user_code: SecureRandom.hex(USER_CODE_LENGTH / 2).upcase,
+      expires_at: Time.current + EXPIRES_IN.seconds
+    )
+  end
+
+  def expired?
+    expires_at < Time.current
+  end
+
+  def approved?
+    status == 'approved' && user_id.present?
+  end
+end
+
 # app/services/auth_service.rb
 class AuthService
   SECRET_KEY = ENV.fetch('JWT_SECRET_KEY')
@@ -353,27 +381,63 @@ end
 
 # app/controllers/api/v1/auth_controller.rb
 class Api::V1::AuthController < Api::V1::BaseController
-  skip_before_action :authorize_user, only: [:login, :refresh]
+  skip_before_action :authorize_user, only: [:device, :device_token, :refresh]
 
-  def login
-    user = User.find_by(email: params[:email])
+  # Initiate device flow
+  def device
+    auth = DeviceAuthorization.create_authorization
 
-    if user&.authenticate(params[:password])
-      token = AuthService.issue_token(user)
-      render json: {
-        token: token,
-        expires_at: 24.hours.from_now.iso8601,
-        user: {
-          id: user.id,
-          email: user.email,
-          name: user.name
-        }
-      }
-    else
-      render json: { error: 'Invalid credentials' }, status: :unauthorized
-    end
+    render json: {
+      device_code: auth.device_code,
+      user_code: auth.user_code,
+      verification_uri: "#{ENV['DASHBOARD_URL']}/device",
+      expires_in: DeviceAuthorization::EXPIRES_IN,
+      interval: DeviceAuthorization::INTERVAL
+    }
   end
 
+  # Poll for token
+  def device_token
+    device_code = params[:device_code]
+    auth = DeviceAuthorization.find_by(device_code: device_code)
+
+    # Check if code exists
+    render json: { error: 'invalid_device_code' }, status: :bad_request and return unless auth
+
+    # Check if expired
+    if auth.expired?
+      render json: { error: 'expired_token' }, status: :bad_request
+      return
+    end
+
+    # Check if denied
+    if auth.status == 'denied'
+      render json: { error: 'access_denied' }, status: :bad_request
+      return
+    end
+
+    # Check if approved
+    unless auth.approved?
+      render json: { error: 'authorization_pending' }, status: 428
+      return
+    end
+
+    # Success: issue token
+    user = auth.user
+    token = AuthService.issue_token(user)
+
+    render json: {
+      token: token,
+      expires_at: 24.hours.from_now.iso8601,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name
+      }
+    }
+  end
+
+  # Refresh token
   def refresh
     decoded = AuthService.verify_token(params[:token])
     if decoded
@@ -388,9 +452,8 @@ class Api::V1::AuthController < Api::V1::BaseController
     end
   end
 
+  # Logout
   def logout
-    # Mark token as revoked (optional, could use Redis blacklist)
-    # or just return 204 and let client discard token
     render json: {}, status: :no_content
   end
 end
@@ -411,16 +474,16 @@ class Api::V1::BaseController < ApplicationController
 end
 ```
 
-### Password Security
+### Dashboard Implementation
 
-- Minimum 12 characters
-- Require uppercase, lowercase, digit, special char
-- Hash with bcrypt cost ≥ 12:
-  ```ruby
-  BCrypt::Password.create(password, cost: 12)
-  ```
-- Enforce rate limiting: max 10 failed login attempts per IP per minute
-- Never log passwords, only log login attempt (email, IP, timestamp, success/failure)
+The web dashboard provides the approval UI at `/device`:
+
+1. User visits `https://app.aidev.io/device`
+2. Enters the user code (AIDEV-WXYZ) or scans QR code
+3. Dashboard looks up `DeviceAuthorization` by `user_code`
+4. If found and not expired, displays approval prompt
+5. On approve, updates `DeviceAuthorization` with `status: 'approved'` and `user_id: current_user.id`
+6. CLI polls `/device/token` endpoint and receives token on next poll
 
 ### Secret Key Generation
 
@@ -517,30 +580,52 @@ Never log:
 ### Unit Tests (Rails)
 
 ```ruby
-describe 'POST /api/v1/auth/login' do
-  it 'returns token for valid credentials' do
-    user = create(:user, password: 'secret123')
-    post '/api/v1/auth/login', params: { email: user.email, password: 'secret123' }
+describe 'POST /api/v1/auth/device' do
+  it 'returns device code and user code' do
+    post '/api/v1/auth/device'
+
+    expect(response).to have_http_status(:ok)
+    expect(json['device_code']).to be_present
+    expect(json['user_code']).to be_present
+    expect(json['verification_uri']).to be_present
+    expect(json['expires_in']).to eq(300)
+    expect(json['interval']).to eq(5)
+  end
+end
+
+describe 'POST /api/v1/auth/device/token' do
+  it 'returns 428 while authorization is pending' do
+    auth = create(:device_authorization)
+    post '/api/v1/auth/device/token', params: { device_code: auth.device_code }
+
+    expect(response).to have_http_status(428)
+    expect(json['error']).to eq('authorization_pending')
+  end
+
+  it 'returns token after user approves' do
+    user = create(:user)
+    auth = create(:device_authorization, user: user, status: 'approved')
+    post '/api/v1/auth/device/token', params: { device_code: auth.device_code }
 
     expect(response).to have_http_status(:ok)
     expect(json['token']).to be_present
     expect(json['user']['email']).to eq(user.email)
   end
 
-  it 'returns 401 for invalid password' do
-    user = create(:user)
-    post '/api/v1/auth/login', params: { email: user.email, password: 'wrong' }
+  it 'returns 400 for denied authorization' do
+    auth = create(:device_authorization, status: 'denied')
+    post '/api/v1/auth/device/token', params: { device_code: auth.device_code }
 
-    expect(response).to have_http_status(:unauthorized)
+    expect(response).to have_http_status(:bad_request)
+    expect(json['error']).to eq('access_denied')
   end
 
-  it 'enforces rate limiting' do
-    user = create(:user)
-    15.times do
-      post '/api/v1/auth/login', params: { email: user.email, password: 'wrong' }
-    end
+  it 'returns 400 for expired code' do
+    auth = create(:device_authorization, expires_at: 10.minutes.ago)
+    post '/api/v1/auth/device/token', params: { device_code: auth.device_code }
 
-    expect(response).to have_http_status(:too_many_requests)
+    expect(response).to have_http_status(:bad_request)
+    expect(json['error']).to eq('expired_token')
   end
 end
 ```
@@ -548,14 +633,24 @@ end
 ### Integration Tests (Go TUI)
 
 ```go
-func TestLoginAndFetch(t *testing.T) {
+func TestDeviceFlow(t *testing.T) {
   // Start test server
   server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-    if r.URL.Path == "/api/v1/auth/login" {
+    if r.URL.Path == "/api/v1/auth/device" && r.Method == "POST" {
+      w.Header().Set("Content-Type", "application/json")
+      json.NewEncoder(w).Encode(map[string]interface{}{
+        "device_code":       "dev_abc123",
+        "user_code":         "AIDEV-WXYZ",
+        "verification_uri":  "https://example.com/device",
+        "expires_in":        300,
+        "interval":          5,
+      })
+    }
+    if r.URL.Path == "/api/v1/auth/device/token" && r.Method == "POST" {
       w.Header().Set("Content-Type", "application/json")
       json.NewEncoder(w).Encode(map[string]interface{}{
         "token":      "fake-jwt-token",
-        "expires_at": time.Now().Add(24 * time.Hour),
+        "expires_at": time.Now().Add(24 * time.Hour).Format(time.RFC3339),
         "user": map[string]interface{}{
           "id":    "user_123",
           "email": "test@example.com",
@@ -566,12 +661,18 @@ func TestLoginAndFetch(t *testing.T) {
   }))
   defer server.Close()
 
-  // Test login
+  // Test device flow
   client := api.NewClient(server.URL)
-  resp, err := client.Login("test@example.com", "password")
 
+  // Step 1: Get device code
+  deviceResp, err := client.DeviceAuthorize()
   assert.NoError(t, err)
-  assert.Equal(t, "fake-jwt-token", resp.Token)
+  assert.Equal(t, "AIDEV-WXYZ", deviceResp.UserCode)
+
+  // Step 2: Poll for token (after user approves in dashboard)
+  loginResp, err := client.DevicePoll(deviceResp.DeviceCode)
+  assert.NoError(t, err)
+  assert.Equal(t, "fake-jwt-token", loginResp.Token)
 }
 ```
 

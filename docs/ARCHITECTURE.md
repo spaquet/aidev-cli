@@ -99,7 +99,7 @@ internal/
     ├── styles.go             Shared color palette
     │
     └── views/
-        ├── login.go          LoginModel — email/password form
+        ├── login.go          LoginModel — device flow authentication
         ├── main.go           MainModel — split list + detail layout
         ├── instance_list.go  InstanceListModel — table with polling
         ├── instance_detail.go InstanceDetailModel — scrollable details
@@ -217,8 +217,8 @@ Type definitions for API communication:
 
 ```
 ┌──────────────┐
-│ ScreenLogin  │  LoginModel (email/password form)
-│              │  ↓ On successful auth
+│ ScreenLogin  │  LoginModel (device flow auth)
+│              │  ↓ On successful auth via browser
 └──────┬───────┘  Switches to ScreenMain
        │
        └──→ ┌──────────────┐
@@ -271,20 +271,29 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 ## Authentication Flow
 
-### Login Process
+### Login Process (Device Flow)
 
 ```
-User starts: aidev
+User starts: aidev tui
     ↓
 AppModel checks stored token
     ├─ Token expired → prompt login
     └─ Token valid → show instances
     ↓
-User enters email/password (or API key)
+LoginModel initiates device flow
     ↓
-API request: POST /api/v1/auth/login
+API request: POST /api/v1/auth/device
     ↓
-Backend returns: {token, expires_at, user}
+Backend returns: {device_code, user_code, verification_uri}
+    ↓
+TUI displays user_code and automatically opens verification_uri in browser
+    ↓
+Backend: User approves in browser, marking device authorization as approved
+    ↓
+TUI polls: POST /api/v1/auth/device/token (every 5 seconds)
+    ├─ 428 (pending) → continue polling
+    ├─ 200 (approved) → got token!
+    └─ 400 (denied/expired) → show error, allow retry
     ↓
 Token stored: ~/.config/aidev/config.json (0600)
     ↓

@@ -119,7 +119,7 @@ func (m *ResizeModalModel) View() string {
 	sb.WriteString(lipgloss.NewStyle().
 		Bold(true).
 		Foreground(ColorFg).
-		Render("📦 Resize Instance"))
+		Render("Resize Instance"))
 	sb.WriteString("\n")
 	sb.WriteString(StyleHint.Render("Current tier: " + m.currentTier))
 	sb.WriteString("\n\n")
@@ -147,7 +147,7 @@ func (m *ResizeModalModel) View() string {
 
 		prefix := "  "
 		if isSelected {
-			prefix = "▶ "
+			prefix = "> "
 		}
 
 		line := prefix + opt.Tier + " (" + opt.Price + ")"
@@ -172,7 +172,7 @@ func (m *ResizeModalModel) View() string {
 	}
 
 	sb.WriteString("\n")
-	sb.WriteString(StyleWarning.Render("⚠️  Resize requires a reboot (~2 minutes)"))
+	sb.WriteString(StyleWarning.Render("Resize requires a reboot (~2 minutes)"))
 	sb.WriteString("\n\n")
 	sb.WriteString("[↑↓] Select  [Enter] Confirm  [Esc] Cancel")
 

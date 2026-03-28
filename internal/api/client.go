@@ -75,6 +75,26 @@ func (c *Client) Logout() error {
 	return c.delete("/api/v1/auth/logout", true)
 }
 
+// DeviceAuthorize initiates a device authorization flow
+func (c *Client) DeviceAuthorize() (*models.DeviceAuthResponse, error) {
+	var resp models.DeviceAuthResponse
+	if err := c.postJSON("/api/v1/auth/device", nil, &resp, false); err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
+// DevicePoll polls for the token result in device authorization flow
+func (c *Client) DevicePoll(deviceCode string) (*models.LoginResponse, error) {
+	req := models.DevicePollRequest{DeviceCode: deviceCode}
+	var resp models.LoginResponse
+	if err := c.postJSON("/api/v1/auth/device/token", req, &resp, false); err != nil {
+		return nil, err
+	}
+	c.SetToken(resp.Token)
+	return &resp, nil
+}
+
 // GetInstances fetches the list of instances
 func (c *Client) GetInstances() (*models.InstancesResponse, error) {
 	var resp models.InstancesResponse
@@ -292,6 +312,14 @@ func (e *HTTPError) Error() string {
 func IsUnauthorized(err error) bool {
 	if httpErr, ok := err.(*HTTPError); ok {
 		return httpErr.StatusCode == http.StatusUnauthorized
+	}
+	return false
+}
+
+// IsAuthorizationPending checks if an error is a 428 Precondition Required (authorization pending)
+func IsAuthorizationPending(err error) bool {
+	if httpErr, ok := err.(*HTTPError); ok {
+		return httpErr.StatusCode == 428
 	}
 	return false
 }

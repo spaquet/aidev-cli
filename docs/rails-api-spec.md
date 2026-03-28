@@ -8,31 +8,52 @@ The Rails 8.1 backend provides a RESTful JSON API for the `aidev` TUI and CLI. A
 
 ## Authentication
 
-All endpoints except `/auth/login` and `/auth/refresh` require:
+All endpoints except `/auth/device`, `/auth/device/token`, and `/auth/refresh` require:
 ```
 Authorization: Bearer <jwt_token>
 ```
 
-### POST /api/v1/auth/login
+### POST /api/v1/auth/device
 
-Authenticate with email + password or API key.
+Initiate a device authorization flow. The client will display a user code and verification URI to the user.
+
+**Request:**
+```
+(empty body)
+```
+
+**Response (200):**
+```json
+{
+  "device_code": "dev_abc123xyz456...",
+  "user_code": "AIDEV-WXYZ",
+  "verification_uri": "https://dashboard.aidev.io/device",
+  "expires_in": 300,
+  "interval": 5
+}
+```
+
+**Notes:**
+- `device_code` — A unique identifier for this authorization request. Used in polling.
+- `user_code` — A short human-readable code (4–8 characters). User enters this in the browser.
+- `verification_uri` — URL where user authenticates. Client opens this in browser.
+- `expires_in` — Seconds until code expires (typically 300 = 5 minutes).
+- `interval` — Recommended polling interval in seconds (typically 5).
+
+---
+
+### POST /api/v1/auth/device/token
+
+Poll for the token result after user has approved in the browser.
 
 **Request:**
 ```json
 {
-  "email": "alice@example.com",
-  "password": "correct-horse-battery-staple"
+  "device_code": "dev_abc123xyz456..."
 }
 ```
 
-**Alternative (API key):**
-```json
-{
-  "api_key": "aidev_sk_abc123def456"
-}
-```
-
-**Response (200):**
+**Response (200) — Authorization approved:**
 ```json
 {
   "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
@@ -45,15 +66,34 @@ Authenticate with email + password or API key.
 }
 ```
 
+**Response (428) — Still waiting for user approval:**
+```json
+{
+  "error": "authorization_pending"
+}
+```
+
+**Response (400) — Code expired or user denied:**
+```json
+{
+  "error": "expired_token"
+}
+```
+or
+```json
+{
+  "error": "access_denied"
+}
+```
+
 **Errors:**
-- `400 Bad Request` — missing email/password or api_key
-- `401 Unauthorized` — invalid credentials
-- `429 Too Many Requests` — rate limited after 10 failed attempts
+- `400 Bad Request` — missing device_code, code expired, or user denied
+- `428 Precondition Required` — authorization still pending (user hasn't approved)
 
 **Notes:**
+- Client should poll at the `interval` specified in the device code response.
+- Stop polling after `expires_in` seconds (or after 400/200 response).
 - Tokens are valid for 24 hours.
-- API keys never expire but can be revoked.
-- Password hashing: bcrypt with cost ≥ 12.
 
 ---
 
