@@ -42,3 +42,6 @@ temp/
 
 # Generated code
 *.pb.go
+
+# Claude Code
+.claude/
