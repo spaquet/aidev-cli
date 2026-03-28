@@ -1,0 +1,129 @@
+# GoReleaser configuration for AIDev CLI
+project_name: aidev
+env:
+  - GO111MODULE=on
+
+builds:
+  - id: aidev
+    main: ./cmd/aidev
+    binary: aidev
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.Date}}
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+
+archives:
+  - id: aidev-archive
+    format: tar.gz
+    format_overrides:
+      - goos: windows
+        format: zip
+    name_template: '{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}'
+    files:
+      - LICENSE
+      - README.md
+      - docs/*
+    wrap_in_directory: true
+
+# Checksum configuration
+checksum:
+  name_template: 'checksums.txt'
+  algorithm: sha256
+
+# Changelog
+changelog:
+  skip: false
+  use: commit
+  groups:
+    - title: 'Features'
+      regexp: '^.*?feat(\(.+\))?!?:.+$'
+      order: 0
+    - title: 'Bug fixes'
+      regexp: '^.*?fix(\(.+\))?!?:.+$'
+      order: 1
+    - title: 'Others'
+      order: 999
+  filters:
+    exclude:
+      - '^test:'
+      - '^chore'
+      - Merge pull request
+      - Merge remote-tracking branch
+
+# Homebrew tap
+brews:
+  - repository:
+      owner: aidev
+      name: homebrew-tap
+    homepage: https://github.com/aidev/aidev-cli
+    description: 'Manage your AI Dev Sandbox instances from the terminal'
+    license: MIT
+    commit_msg_template: 'Bump aidev to {{ .Version }}'
+    folder: Formula
+    install: |
+      bin.install "aidev"
+    test: |
+      system "#{bin}/aidev", "--version"
+
+# Release notes
+release:
+  disable: false
+  draft: false
+  prerelease: auto
+  make_latest: true
+  header: |
+    ## AIDev CLI {{ .Version }}
+
+    [Download](https://github.com/aidev/aidev-cli/releases/tag/{{ .Tag }})
+  footer: |
+    ## Quick Start
+
+    ```bash
+    # macOS (Homebrew)
+    brew install aidev/tap/aidev
+
+    # Linux
+    curl -sSL https://install.aidev.sh | sh
+
+    # Windows (Scoop)
+    scoop install aidev
+    ```
+
+    ## Documentation
+
+    - [README](https://github.com/aidev/aidev-cli#readme)
+    - [Getting Started](https://github.com/aidev/aidev-cli/blob/main/docs/GETTING_STARTED.md)
+
+# Notarization (macOS only)
+notarize:
+  macos:
+    - enabled: false
+
+# Docker image (optional)
+dockers:
+  - image_templates:
+      - 'ghcr.io/aidev/aidev:{{ .Version }}'
+      - 'ghcr.io/aidev/aidev:latest'
+    dockerfile: Dockerfile
+    goos: linux
+    goarch: amd64
+    build_flag_templates:
+      - '--build-arg'
+      - 'VERSION={{ .Version }}'
+
+# S3 upload (optional, for install.aidev.sh mirror)
+s3:
+  - bucket: aidev-releases
+    region: us-east-1
+    folder: 'releases/{{ .Version }}'

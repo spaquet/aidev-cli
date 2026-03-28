@@ -1,8 +1,8 @@
-# AIDev CLI — Phase 1 Skeleton
+# AIDev CLI — Complete Implementation
 
 The terminal user interface (TUI) and command-line tool for managing AI Dev Sandbox instances.
 
-**Status:** Phase 1 complete — auth and login infrastructure working.
+**Status:** ✅ All 6 phases complete — ready for distribution and deployment.
 
 ## Overview
 
@@ -14,18 +14,24 @@ The `aidev` CLI provides:
 
 ## Building
 
+### Development Build
+
 ```bash
-# Build
-make build
+# Build locally
+go build -o aidev ./cmd/aidev
 
 # Run the TUI (default)
-./bin/aidev
+./aidev
+```
 
-# Or use make run
-make run
+### Release Build
 
-# Cross-compile for all platforms
-make cross-build
+```bash
+# Requires goreleaser (https://goreleaser.com)
+goreleaser release --snapshot --rm-dist
+
+# Full production release (requires GitHub token)
+GITHUB_TOKEN=$GH_TOKEN goreleaser release --rm-dist
 ```
 
 ## Commands
@@ -35,21 +41,30 @@ make cross-build
 aidev
 
 # Login with email/password
-aidev login --email alice@example.com --password correcthorsebatterystaple
+aidev login
 
 # Login with API key
-aidev login --api-key aidev_sk_abc123...
+aidev login --api-key
 
-# Show config
+# Show configuration
 aidev config show
 
-# Logout
-aidev config logout
+# Manage instances
+aidev instances
+aidev instances --json  # JSON output for scripting
 
-# (Phase 2+)
-aidev instances list
+# SSH directly to instance
 aidev ssh my-instance
-aidev forward my-instance 3000
+
+# Set up port forwarding
+aidev forward my-instance 3000 3000
+
+# Check for updates
+aidev update
+
+# Show help
+aidev --help
+aidev --version
 ```
 
 ## Configuration
@@ -84,32 +99,46 @@ Key endpoints:
 ## Architecture
 
 ```
-cmd/aidev/main.go              # Cobra CLI root
+cmd/aidev/main.go                    # Cobra CLI root + version info
 │
 ├── internal/api/
-│   └── client.go              # HTTP client with auth + 401 retry
+│   ├── client.go                    # HTTP client with auth + 401 retry
+│   └── sse.go                       # SSE client for real-time updates
 │
 ├── internal/auth/
-│   └── store.go               # XDG config file read/write
+│   └── store.go                     # XDG config file read/write (mode 0600)
 │
 ├── internal/models/
-│   ├── auth.go                # Request/response types
-│   └── instance.go            # Instance model
+│   ├── auth.go                      # Request/response types
+│   ├── instance.go                  # Instance model
+│   └── event.go                     # SSE event types
+│
+├── internal/ssh/
+│   ├── ssh.go                       # SSH connection + PTY management
+│   └── forward.go                   # SSH port forwarding (background)
 │
 ├── internal/tui/
-│   ├── app.go                 # Root Bubble Tea model + screen state
-│   ├── styles.go              # Lipgloss styles
+│   ├── app.go                       # Root Bubble Tea model + state machine
 │   └── views/
-│       ├── login.go           # LoginModel (email/password form)
-│       └── styles.go          # View-specific colors
+│       ├── login.go                 # LoginModel (email/password)
+│       ├── main.go                  # MainModel (list + detail split)
+│       ├── instance_list.go         # InstanceListModel (table with polling)
+│       ├── instance_detail.go       # InstanceDetailModel (scrollable viewport)
+│       ├── confirm_dialog.go        # Confirmation modal
+│       ├── resize_modal.go          # Tier selection modal
+│       ├── forward_modal.go         # Port forwarding modal
+│       ├── notification.go          # Toast notifications manager
+│       └── styles.go                # Color palette & lipgloss styles
 │
 └── internal/commands/
-    ├── tui.go                 # Launch TUI
-    ├── login.go               # Login command
-    ├── ssh.go                 # SSH command (Phase 4)
-    ├── forward.go             # Port forward command (Phase 4)
-    ├── instances.go           # Instance management (Phase 2)
-    └── config.go              # Config show/logout
+    ├── main.go                      # Cobra command registration
+    ├── tui.go                       # Launch TUI
+    ├── login.go                     # Login command
+    ├── ssh.go                       # SSH command with instance lookup
+    ├── forward.go                   # Port forward command
+    ├── instances.go                 # Instance management (list, JSON export)
+    ├── config.go                    # Config management (show, set, get, reset)
+    └── update.go                    # Self-update command
 ```
 
 ## Tech Stack
@@ -137,19 +166,43 @@ make fmt
 make dev-watch
 ```
 
-## Phase 2–6 Roadmap
+## Implementation Status
 
-- **Phase 2**: Instance list (GET /instances, polling, table with status badges)
-- **Phase 3**: Instance detail + CRUD (modals for delete/resize/update)
-- **Phase 4**: SSH + port forwarding (`ssh` subprocess, `aidev ssh <name>` shortcut)
-- **Phase 5**: SSE real-time updates, image updates, port exposure
-- **Phase 6**: Cross-platform distribution (goreleaser, Homebrew tap, curl installer)
+| Phase | Feature | Status |
+|-------|---------|--------|
+| 1 | Authentication & Login | ✅ Complete |
+| 2 | Instance List & Polling | ✅ Complete |
+| 3 | Detail Pane & CRUD Operations | ✅ Complete |
+| 4 | SSH Connection & Port Forwarding | ✅ Complete |
+| 5 | Real-time Updates & Notifications | ✅ Complete |
+| 6 | Distribution & Self-Update | ✅ Complete |
 
-## Design Docs
+### What's Included
 
-- **`docs/tui-design.md`** — UI/UX spec: screens, navigation, keybindings
-- **`docs/rails-api-spec.md`** — REST API spec: all endpoints, request/response formats, SSE events
-- **`docs/auth-spec.md`** — Auth spec: JWT lifecycle, config storage, Rails implementation guide
+- **Phase 1**: Cobra CLI, JWT auth, config storage (XDG-compliant), LoginView
+- **Phase 2**: Instance list with polling, table widget, status badges (running/stopped/error)
+- **Phase 3**: Scrollable detail pane, confirm dialogs, resize modal, CRUD operations
+- **Phase 4**: Certificate-based SSH connection, port forwarding, `aidev ssh <name>` shortcut
+- **Phase 5**: SSE real-time updates, toast notifications, port forwarding modal
+- **Phase 6**: Goreleaser config, install.sh, self-update command, documentation
+
+## Documentation
+
+### User Guides
+- **[Getting Started](docs/GETTING_STARTED.md)** — Installation methods, quick start, command reference
+- **[Configuration Guide](docs/CONFIGURATION.md)** — Config file format, environment variables, advanced setup
+
+### Design & Technical Docs
+- **[TUI Design](docs/tui-design.md)** — UI/UX spec: screens, navigation, keybindings
+- **[API Reference](docs/rails-api-spec.md)** — REST API spec: all endpoints, request/response formats, SSE events
+- **[Auth Specification](docs/auth-spec.md)** — Auth spec: JWT lifecycle, config storage, Rails implementation guide
+
+### Installation
+- **Binary**: Download from [GitHub Releases](https://github.com/aidev/aidev-cli/releases)
+- **Homebrew**: `brew install aidev/tap/aidev` (macOS)
+- **Linux**: `curl -sSL https://install.aidev.sh | sh`
+- **Windows**: `scoop install aidev`
+- **Manual**: Extract binary and add to PATH
 
 ## License
 
