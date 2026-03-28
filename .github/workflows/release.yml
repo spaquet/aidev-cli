@@ -1,0 +1,71 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+env:
+  GO_VERSION: '1.23'
+
+jobs:
+  # Run all CI tests before release
+  pre-release-test:
+    name: Pre-release tests
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Run go vet
+        run: go vet ./...
+
+      - name: Build binary
+        run: go build -v ./cmd/aidev
+
+      - name: Run tests
+        run: go test -v -cover ./...
+
+  lint-pre-release:
+    name: Lint (pre-release)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - uses: golangci/golangci-lint-action@v4
+        with:
+          version: v1.59.0
+          args: --timeout=5m
+
+  # Release with GoReleaser (depends on all tests passing)
+  release:
+    name: Release artifacts
+    needs: [pre-release-test, lint-pre-release]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - uses: goreleaser/goreleaser-action@v6
+        with:
+          version: latest
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
