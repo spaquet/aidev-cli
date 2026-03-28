@@ -17,14 +17,15 @@ const (
 
 // AppModel is the root Bubble Tea model
 type AppModel struct {
-	screen     Screen
-	baseURL    string
-	token      string
-	config     *models.Config
-	apiClient  *api.Client
-	authStore  *auth.Store
-	width      int
-	height     int
+	screen      Screen
+	baseURL     string
+	token       string
+	config      *models.Config
+	apiClient   *api.Client
+	authStore   *auth.Store
+	width       int
+	height      int
+	SSHInstance *models.Instance // Set when SSH is requested
 
 	// Views
 	loginView *views.LoginModel
@@ -118,6 +119,12 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case views.LoginSuccessMsg:
 		// Login succeeded
 		return m, m.handleLoginSuccess(msg)
+
+	case views.SSHConnectMsg:
+		// SSH requested - store instance and quit TUI
+		instance := msg.Instance
+		m.SSHInstance = &instance
+		return m, tea.Quit
 	}
 
 	// Route to current screen

@@ -8,6 +8,7 @@ import (
 	"github.com/aidev/cli/internal/api"
 	"github.com/aidev/cli/internal/auth"
 	"github.com/aidev/cli/internal/commands"
+	"github.com/aidev/cli/internal/ssh"
 )
 
 var (
@@ -51,5 +52,18 @@ func launchTUI(baseURL string) {
 	}
 
 	apiClient := api.NewClient(baseURL)
-	commands.RunTUI(apiClient, authStore, baseURL)
+	sshInstance := commands.RunTUI(apiClient, authStore, baseURL)
+
+	// If user initiated SSH connection, handle it
+	if sshInstance != nil {
+		err := ssh.Connect(ssh.ConnectOptions{
+			Host: sshInstance.SSHHost,
+			Port: sshInstance.SSHPort,
+			User: sshInstance.SSHUser,
+		})
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "SSH connection error: %v\n", err)
+			os.Exit(1)
+		}
+	}
 }

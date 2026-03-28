@@ -82,8 +82,10 @@ func (m *MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Connect via SSH
 			selected := m.list.SelectedInstance()
 			if selected != nil && selected.Status == "running" {
-				// TODO: Trigger SSH connection in Phase 4
-				m.operationMsg = "SSH connection initiated..."
+				// Signal parent to handle SSH connection and exit TUI
+				return m, func() tea.Msg {
+					return SSHConnectMsg{Instance: *selected}
+				}
 			}
 			return m, nil
 
@@ -378,4 +380,9 @@ func (m *MainModel) resizeInstance(id string, req *models.UpdateInstanceRequest)
 type operationErrorMsg struct {
 	err       error
 	operation string
+}
+
+// SSHConnectMsg is sent when user requests SSH connection
+type SSHConnectMsg struct {
+	Instance models.Instance
 }

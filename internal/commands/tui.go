@@ -5,6 +5,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/aidev/cli/internal/api"
 	"github.com/aidev/cli/internal/auth"
+	"github.com/aidev/cli/internal/models"
 	"github.com/aidev/cli/internal/tui"
 )
 
@@ -28,11 +29,14 @@ func NewTUICmd() *cobra.Command {
 }
 
 // RunTUI launches the Bubble Tea application
-func RunTUI(apiClient *api.Client, authStore *auth.Store, baseURL string) {
+// Returns sshInstance if user initiated SSH connection
+func RunTUI(apiClient *api.Client, authStore *auth.Store, baseURL string) *models.Instance {
 	appModel := tui.NewAppModel(baseURL, apiClient, authStore)
 
 	p := tea.NewProgram(appModel, tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
 		panic(err)
 	}
+
+	return appModel.SSHInstance
 }
