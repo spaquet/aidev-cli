@@ -1,0 +1,44 @@
+# Build outputs
+bin/
+dist/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Go build cache
+.go/
+*.o
+*.a
+
+# Test cache
+.testcache
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+*.iml
+
+# Dependencies
+vendor/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# OS-specific
+Thumbs.db
+Desktop.ini
+
+# Local development
+*.log
+tmp/
+temp/
+
+# Generated code
+*.pb.go
