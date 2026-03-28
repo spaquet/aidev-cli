@@ -38,4 +38,8 @@ var (
 	StyleWarning = lipgloss.NewStyle().
 		Foreground(ColorWarning).
 		Bold(true)
+
+	StyleLink = lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#87CEEB")).
+		Underline(true)
 )
