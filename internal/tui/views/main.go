@@ -20,6 +20,13 @@ const (
 	ModalForward
 )
 
+// PortForward represents an active port forward
+type PortForward struct {
+	LocalPort  int
+	RemotePort int
+	StopFunc   func() error
+}
+
 // MainModel is the main view (instance list + detail)
 type MainModel struct {
 	client         *api.Client
@@ -29,23 +36,28 @@ type MainModel struct {
 	modal          Modal
 	confirmDialog  *ConfirmDialogModel
 	resizeModal    *ResizeModalModel
+	forwardModal   *ForwardModalModel
+	notifications  *NotificationManager
 	width          int
 	height         int
 	showHelp       bool
 	operationMsg   string // Status message
+	portForwards   map[string]*PortForward // instance ID -> port forward
 }
 
 // NewMainModel creates the main view
 func NewMainModel(client *api.Client, user *models.User, width, height int) *MainModel {
 	return &MainModel{
-		client:   client,
-		user:     user,
-		list:     NewInstanceListModel(client, width*40/100, height),
-		detail:   NewInstanceDetailModel(width*60/100, height),
-		width:    width,
-		height:   height,
-		showHelp: true,
-		modal:    ModalNone,
+		client:        client,
+		user:          user,
+		list:          NewInstanceListModel(client, width*40/100, height),
+		detail:        NewInstanceDetailModel(width*60/100, height),
+		notifications: NewNotificationManager(),
+		width:         width,
+		height:        height,
+		showHelp:      true,
+		modal:         ModalNone,
+		portForwards:  make(map[string]*PortForward),
 	}
 }
 
@@ -148,6 +160,16 @@ func (m *MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 
+		case "f":
+			// Port forwarding
+			selected := m.list.SelectedInstance()
+			if selected != nil && selected.Status == "running" {
+				m.modal = ModalForward
+				m.forwardModal = NewForwardModal(3000)
+				return m, m.forwardModal.Init()
+			}
+			return m, nil
+
 		default:
 			// Pass to list
 			model, cmd := m.list.Update(msg)
@@ -223,6 +245,12 @@ func (m *MainModel) View() string {
 	sb.WriteString(combined)
 	sb.WriteString("\n")
 
+	// Notifications
+	m.notifications.Cleanup()
+	if m.notifications.Count() > 0 {
+		sb.WriteString(m.notifications.Render(m.width))
+	}
+
 	// Operation message (temporary status)
 	if m.operationMsg != "" {
 		sb.WriteString(lipgloss.NewStyle().
@@ -292,6 +320,25 @@ func (m *MainModel) handleModalUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		model, cmd := m.resizeModal.Update(msg)
 		if resize, ok := model.(*ResizeModalModel); ok {
 			m.resizeModal = resize
+		}
+		return m, cmd
+
+	case ModalForward:
+		if resp, ok := msg.(ForwardResponse); ok {
+			if resp.Confirm {
+				selected := m.list.SelectedInstance()
+				if selected != nil {
+					m.modal = ModalNone
+					return m, m.startPortForward(selected, resp.LocalPort, resp.RemotePort)
+				}
+			}
+			m.modal = ModalNone
+			m.forwardModal = nil
+			return m, nil
+		}
+		model, cmd := m.forwardModal.Update(msg)
+		if forward, ok := model.(*ForwardModalModel); ok {
+			m.forwardModal = forward
 		}
 		return m, cmd
 	}
@@ -376,6 +423,17 @@ func (m *MainModel) resizeInstance(id string, req *models.UpdateInstanceRequest)
 	}
 }
 
+func (m *MainModel) startPortForward(inst *models.Instance, localPort, remotePort int) tea.Cmd {
+	return func() tea.Msg {
+		// Import ssh package to use port forwarding
+		return portForwardStartedMsg{
+			instanceID: inst.ID,
+			localPort:  localPort,
+			remotePort: remotePort,
+		}
+	}
+}
+
 // operationErrorMsg is sent when an operation fails
 type operationErrorMsg struct {
 	err       error
@@ -385,4 +443,11 @@ type operationErrorMsg struct {
 // SSHConnectMsg is sent when user requests SSH connection
 type SSHConnectMsg struct {
 	Instance models.Instance
+}
+
+// portForwardStartedMsg is sent when port forwarding starts
+type portForwardStartedMsg struct {
+	instanceID string
+	localPort  int
+	remotePort int
 }
