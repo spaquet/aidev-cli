@@ -28,7 +28,7 @@ type AppModel struct {
 
 	// Views
 	loginView *views.LoginModel
-	mainView  tea.Model // Placeholder for now
+	mainView  *views.MainModel
 }
 
 // NewAppModel creates the root app model
@@ -68,8 +68,15 @@ func (m *AppModel) Init() tea.Cmd {
 	m.token = config.Token
 	m.apiClient.SetToken(m.token)
 	m.screen = ScreenMain
-	// TODO: Initialize main view
-	return nil
+
+	// Initialize main view with a placeholder user (we'll fetch real data in Phase 3)
+	user := &models.User{
+		ID:    "unknown",
+		Email: config.UserEmail,
+		Name:  config.UserEmail,
+	}
+	m.mainView = views.NewMainModel(m.apiClient, user, m.width, m.height)
+	return m.mainView.Init()
 }
 
 // Update handles messages
@@ -99,8 +106,14 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.token = msg.config.Token
 		m.apiClient.SetToken(m.token)
 		m.screen = ScreenMain
-		// TODO: Initialize main view
-		return m, nil
+
+		user := &models.User{
+			ID:    "unknown",
+			Email: msg.config.UserEmail,
+			Name:  msg.config.UserEmail,
+		}
+		m.mainView = views.NewMainModel(m.apiClient, user, m.width, m.height)
+		return m, m.mainView.Init()
 
 	case views.LoginSuccessMsg:
 		// Login succeeded
@@ -118,6 +131,16 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, cmd
 		}
+
+	case ScreenMain:
+		if m.mainView != nil {
+			var cmd tea.Cmd
+			model, cmd := m.mainView.Update(msg)
+			if mainModel, ok := model.(*views.MainModel); ok {
+				m.mainView = mainModel
+			}
+			return m, cmd
+		}
 	}
 
 	return m, nil
@@ -132,8 +155,10 @@ func (m *AppModel) View() string {
 		}
 		return "Loading..."
 	case ScreenMain:
-		// TODO: Render main view
-		return "Main view coming soon..."
+		if m.mainView != nil {
+			return m.mainView.View()
+		}
+		return "Loading..."
 	}
 	return "Unknown screen"
 }
@@ -142,19 +167,26 @@ func (m *AppModel) View() string {
 
 func (m *AppModel) handleLoginSuccess(msg views.LoginSuccessMsg) tea.Cmd {
 	return func() tea.Msg {
-		// Save config
+		// Save config (note: expires_at will be set from JWT decode in Phase 3)
 		config := &models.Config{
-			BaseURL: m.baseURL,
-			Token:   msg.Token,
-			// expires_at will be set based on JWT
+			BaseURL:        m.baseURL,
+			Token:          msg.Token,
+			TokenExpiresAt: "", // Will be set after JWT decode
+			UserEmail:      "", // Will be set after JWT decode
 		}
 		m.authStore.Save(config)
 		m.config = config
 		m.token = msg.Token
 		m.apiClient.SetToken(m.token)
 		m.screen = ScreenMain
-		// TODO: Initialize main view
-		return nil
+
+		user := &models.User{
+			ID:    "unknown",
+			Email: "unknown",
+			Name:  "User",
+		}
+		m.mainView = views.NewMainModel(m.apiClient, user, m.width, m.height)
+		return m.mainView.Init()
 	}
 }
 
