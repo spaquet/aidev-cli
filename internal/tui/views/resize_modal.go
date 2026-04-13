@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 )
 
 // TierOption represents a machine tier
@@ -82,7 +82,7 @@ func (m *ResizeModalModel) Init() tea.Cmd {
 
 func (m *ResizeModalModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		switch msg.String() {
 		case "up", "k":
 			if m.selectedIdx > 0 {
@@ -113,7 +113,7 @@ func (m *ResizeModalModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m *ResizeModalModel) View() string {
+func (m *ResizeModalModel) View() tea.View {
 	var sb strings.Builder
 
 	sb.WriteString(lipgloss.NewStyle().
@@ -178,11 +178,11 @@ func (m *ResizeModalModel) View() string {
 
 	content := StyleBorderBox.Render(sb.String())
 
-	return lipgloss.Place(
+	return tea.NewView(lipgloss.Place(
 		m.width,
 		m.height,
 		lipgloss.Center,
 		lipgloss.Center,
 		content,
-	)
+	))
 }

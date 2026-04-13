@@ -4,8 +4,9 @@ import (
 	"fmt"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
+
 	"github.com/aidev/cli/internal/api"
 	"github.com/aidev/cli/internal/models"
 )
@@ -29,20 +30,20 @@ type PortForward struct {
 
 // MainModel is the main view (instance list + detail)
 type MainModel struct {
-	client         *api.Client
-	user           *models.User
-	list           *InstanceListModel
-	detail         *InstanceDetailModel
-	modal          Modal
-	confirmDialog  *ConfirmDialogModel
-	resizeModal    *ResizeModalModel
-	forwardModal   *ForwardModalModel
-	notifications  *NotificationManager
-	width          int
-	height         int
-	showHelp       bool
-	operationMsg   string // Status message
-	portForwards   map[string]*PortForward // instance ID -> port forward
+	client        *api.Client
+	user          *models.User
+	list          *InstanceListModel
+	detail        *InstanceDetailModel
+	modal         Modal
+	confirmDialog *ConfirmDialogModel
+	resizeModal   *ResizeModalModel
+	forwardModal  *ForwardModalModel
+	notifications *NotificationManager
+	width         int
+	height        int
+	showHelp      bool
+	operationMsg  string                  // Status message
+	portForwards  map[string]*PortForward // instance ID -> port forward
 }
 
 // NewMainModel creates the main view
@@ -72,7 +73,7 @@ func (m *MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	switch msg := msg.(type) {
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		switch msg.String() {
 		case "ctrl+c", "q":
 			return m, tea.Quit
@@ -207,15 +208,13 @@ func (m *MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 }
 
-func (m *MainModel) View() string {
-	// If modal is open, show it
+func (m *MainModel) View() tea.View {
 	if m.modal != ModalNone {
-		return m.renderModalOverlay()
+		return tea.NewView(m.renderModalOverlay())
 	}
 
 	var sb strings.Builder
 
-	// Top bar
 	topBar := lipgloss.NewStyle().
 		Foreground(ColorFg).
 		Background(lipgloss.Color("#1e1e1e")).
@@ -225,18 +224,16 @@ func (m *MainModel) View() string {
 	sb.WriteString(topBar)
 	sb.WriteString("\n")
 
-	// Main content: list + detail side-by-side
 	listWidth := m.width * 40 / 100
 	detailWidth := m.width * 60 / 100
 
-	listContent := m.list.View()
-	detailContent := m.detail.View()
+	listContent := m.list.View().Content
+	detailContent := m.detail.View().Content
 
 	// Pad content to widths
 	listPadded := lipgloss.NewStyle().Width(listWidth - 1).Render(listContent)
 	detailPadded := lipgloss.NewStyle().Width(detailWidth - 1).Render(detailContent)
 
-	// Combine horizontally
 	combined := lipgloss.JoinHorizontal(lipgloss.Top,
 		listPadded,
 		detailPadded,
@@ -245,13 +242,11 @@ func (m *MainModel) View() string {
 	sb.WriteString(combined)
 	sb.WriteString("\n")
 
-	// Notifications
 	m.notifications.Cleanup()
 	if m.notifications.Count() > 0 {
 		sb.WriteString(m.notifications.Render(m.width))
 	}
 
-	// Operation message (temporary status)
 	if m.operationMsg != "" {
 		sb.WriteString(lipgloss.NewStyle().
 			Foreground(ColorWarning).
@@ -259,7 +254,6 @@ func (m *MainModel) View() string {
 		sb.WriteString("\n")
 	}
 
-	// Footer
 	footer := ""
 	if m.showHelp {
 		footer = "[↑↓] Navigate  [Enter] Select  [c]onnect [s]tart [S]top [r]estart"
@@ -275,7 +269,7 @@ func (m *MainModel) View() string {
 
 	sb.WriteString(footerStyle)
 
-	return sb.String()
+	return tea.NewView(sb.String())
 }
 
 // Private methods
@@ -350,11 +344,11 @@ func (m *MainModel) renderModalOverlay() string {
 	switch m.modal {
 	case ModalConfirmDelete:
 		if m.confirmDialog != nil {
-			return m.confirmDialog.View()
+			return m.confirmDialog.View().Content
 		}
 	case ModalResize:
 		if m.resizeModal != nil {
-			return m.resizeModal.View()
+			return m.resizeModal.View().Content
 		}
 	}
 	return ""

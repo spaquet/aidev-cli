@@ -4,9 +4,10 @@ import (
 	"fmt"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/bubbles/viewport"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/viewport"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
+
 	"github.com/aidev/cli/internal/models"
 	"github.com/aidev/cli/internal/tui/components"
 )
@@ -21,8 +22,7 @@ type InstanceDetailModel struct {
 
 // NewInstanceDetailModel creates the detail pane
 func NewInstanceDetailModel(width, height int) *InstanceDetailModel {
-	vp := viewport.New(width, height)
-	vp.HighPerformanceRendering = false
+	vp := viewport.New(viewport.WithWidth(width), viewport.WithHeight(height))
 
 	return &InstanceDetailModel{
 		viewport: vp,
@@ -40,15 +40,15 @@ func (m *InstanceDetailModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		m.viewport.Width = msg.Width
-		m.viewport.Height = msg.Height
+		m.viewport.SetWidth(msg.Width)
+		m.viewport.SetHeight(msg.Height)
 
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		switch msg.String() {
 		case "up", "k", "pgup":
-			m.viewport.LineUp(3)
+			m.viewport.ScrollUp(3)
 		case "down", "j", "pgdn":
-			m.viewport.LineDown(3)
+			m.viewport.ScrollDown(3)
 		}
 	}
 
@@ -57,14 +57,14 @@ func (m *InstanceDetailModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-func (m *InstanceDetailModel) View() string {
+func (m *InstanceDetailModel) View() tea.View {
 	if m.instance == nil {
-		return StyleHint.Render("Select an instance to view details")
+		return tea.NewView(StyleHint.Render("Select an instance to view details"))
 	}
 
 	content := m.renderDetail()
 	m.viewport.SetContent(content)
-	return m.viewport.View()
+	return tea.NewView(m.viewport.View())
 }
 
 func (m *InstanceDetailModel) SetInstance(inst *models.Instance) {

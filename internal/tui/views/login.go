@@ -7,8 +7,9 @@ import (
 	"strings"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
+
 	"github.com/aidev/cli/internal/api"
 )
 
@@ -16,25 +17,25 @@ import (
 type LoginState int
 
 const (
-	LoginStateWelcome    LoginState = iota
+	LoginStateWelcome LoginState = iota
 	LoginStateInitiating
 	LoginStateWaiting
 	LoginStateError
 )
 
 type LoginModel struct {
-	client         *api.Client
-	baseURL        string
-	version        string
-	width          int
-	height         int
-	state          LoginState
-	deviceCode     string
-	userCode       string
+	client          *api.Client
+	baseURL         string
+	version         string
+	width           int
+	height          int
+	state           LoginState
+	deviceCode      string
+	userCode        string
 	verificationURI string
-	pollInterval   int
-	errorMsg       string
-	lastError      error
+	pollInterval    int
+	errorMsg        string
+	lastError       error
 }
 
 // Message types
@@ -73,11 +74,11 @@ func (m *LoginModel) Init() tea.Cmd {
 
 func (m *LoginModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		switch msg.String() {
 		case "ctrl+c", "esc":
 			return m, tea.Quit
-		case "enter", " ":
+		case "enter", "space":
 			// Welcome state: start login
 			if m.state == LoginStateWelcome {
 				m.state = LoginStateInitiating
@@ -142,12 +143,12 @@ func (m *LoginModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m *LoginModel) View() string {
+func (m *LoginModel) View() tea.View {
 	var sb strings.Builder
 
 	switch m.state {
 	case LoginStateWelcome:
-		return m.renderWelcome()
+		return tea.NewView(m.renderWelcome())
 
 	case LoginStateInitiating:
 		sb.WriteString("AIDev Login")
@@ -186,7 +187,7 @@ func (m *LoginModel) View() string {
 	sb.WriteString("\n")
 	sb.WriteString(StyleHint.Render("[Ctrl+C] Cancel"))
 
-	return StyleBorderBox.Render(sb.String())
+	return tea.NewView(StyleBorderBox.Render(sb.String()))
 }
 
 // Private methods

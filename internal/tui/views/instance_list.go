@@ -5,9 +5,10 @@ import (
 	"strings"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/bubbles/table"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/table"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
+
 	"github.com/aidev/cli/internal/api"
 	"github.com/aidev/cli/internal/models"
 	"github.com/aidev/cli/internal/tui/components"
@@ -44,7 +45,7 @@ func NewInstanceListModel(client *api.Client, width, height int) *InstanceListMo
 		table.WithColumns(columns),
 		table.WithRows([]table.Row{}),
 		table.WithFocused(true),
-		table.WithHeight(height - 5),
+		table.WithHeight(height-5),
 	)
 
 	s := table.DefaultStyles()
@@ -82,7 +83,7 @@ func (m *InstanceListModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		switch msg.String() {
 		case "up", "k":
 			m.table.MoveUp(1)
@@ -117,10 +118,9 @@ func (m *InstanceListModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-func (m *InstanceListModel) View() string {
+func (m *InstanceListModel) View() tea.View {
 	var sb strings.Builder
 
-	// Header
 	header := lipgloss.NewStyle().
 		Foreground(ColorFg).
 		Bold(true).
@@ -136,20 +136,18 @@ func (m *InstanceListModel) View() string {
 	sb.WriteString(header)
 	sb.WriteString("\n\n")
 
-	// Error message
 	if m.errorMsg != "" {
 		sb.WriteString(StyleError.Render("Error: " + m.errorMsg))
 		sb.WriteString("\n\n")
 	}
 
-	// Table
 	if len(m.instances) == 0 {
 		sb.WriteString(StyleHint.Render("No instances found. Create one with 'aidev instances create'"))
 	} else {
 		sb.WriteString(m.table.View())
 	}
 
-	return sb.String()
+	return tea.NewView(sb.String())
 }
 
 func (m *InstanceListModel) SelectedInstance() *models.Instance {

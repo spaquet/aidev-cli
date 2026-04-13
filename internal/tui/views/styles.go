@@ -1,6 +1,6 @@
 package views
 
-import "github.com/charmbracelet/lipgloss"
+import "charm.land/lipgloss/v2"
 
 // Colors used in views
 var (
@@ -15,31 +15,31 @@ var (
 // Styles for login view
 var (
 	StyleBorderBox = lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(ColorBorder).
-		Padding(1, 2)
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(ColorBorder).
+			Padding(1, 2)
 
 	StyleLabel = lipgloss.NewStyle().
-		Bold(true).
-		Foreground(ColorFg)
+			Bold(true).
+			Foreground(ColorFg)
 
 	StyleHint = lipgloss.NewStyle().
-		Foreground(ColorDimmed).
-		Italic(true)
+			Foreground(ColorDimmed).
+			Italic(true)
 
 	StyleError = lipgloss.NewStyle().
-		Foreground(ColorError).
-		Bold(true)
+			Foreground(ColorError).
+			Bold(true)
 
 	StyleSuccess = lipgloss.NewStyle().
-		Foreground(ColorSuccess).
-		Bold(true)
+			Foreground(ColorSuccess).
+			Bold(true)
 
 	StyleWarning = lipgloss.NewStyle().
-		Foreground(ColorWarning).
-		Bold(true)
+			Foreground(ColorWarning).
+			Bold(true)
 
 	StyleLink = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#87CEEB")).
-		Underline(true)
+			Foreground(lipgloss.Color("#87CEEB")).
+			Underline(true)
 )

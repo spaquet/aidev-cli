@@ -5,9 +5,9 @@ import (
 	"strconv"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/bubbles/textinput"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 )
 
 // ForwardModalModel allows user to set up port forwarding
@@ -52,7 +52,7 @@ func (m *ForwardModalModel) Init() tea.Cmd {
 
 func (m *ForwardModalModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		switch msg.String() {
 		case "tab":
 			m.focusIdx = (m.focusIdx + 1) % 2
@@ -100,7 +100,7 @@ func (m *ForwardModalModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 }
 
-func (m *ForwardModalModel) View() string {
+func (m *ForwardModalModel) View() tea.View {
 	var sb strings.Builder
 
 	sb.WriteString(lipgloss.NewStyle().
@@ -131,13 +131,13 @@ func (m *ForwardModalModel) View() string {
 
 	content := StyleBorderBox.Render(sb.String())
 
-	return lipgloss.Place(
+	return tea.NewView(lipgloss.Place(
 		m.width,
 		m.height,
 		lipgloss.Center,
 		lipgloss.Center,
 		content,
-	)
+	))
 }
 
 func (m *ForwardModalModel) updateFocus() {

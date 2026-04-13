@@ -1,9 +1,13 @@
 package components
 
-import "github.com/charmbracelet/lipgloss"
+import (
+	"image/color"
+
+	"charm.land/lipgloss/v2"
+)
 
 // StatusColor returns the color for an instance status
-func StatusColor(status string) lipgloss.Color {
+func StatusColor(status string) color.Color {
 	switch status {
 	case "running":
 		return lipgloss.Color("#90EE90") // Green
@@ -21,16 +25,16 @@ func StatusColor(status string) lipgloss.Color {
 // StatusBadge returns a formatted status badge
 func StatusBadge(status string) string {
 	symbol := "●"
-	color := StatusColor(status)
+	c := StatusColor(status)
 
 	return lipgloss.NewStyle().
-		Foreground(color).
+		Foreground(c).
 		Bold(true).
 		Render(symbol + " " + status)
 }
 
 // TierColor returns the background color for a tier
-func TierColor(tier string) lipgloss.Color {
+func TierColor(tier string) color.Color {
 	switch tier {
 	case "builder":
 		return lipgloss.Color("#9370DB") // Purple
@@ -71,18 +75,17 @@ func DiskBar(used, total int) string {
 		bar += "░"
 	}
 
-	// Color based on usage percentage
 	pct := (used * 100) / total
-	var color lipgloss.Color
+	var c color.Color
 	if pct > 80 {
-		color = lipgloss.Color("#FF6B6B") // Red
+		c = lipgloss.Color("#FF6B6B") // Red
 	} else if pct > 60 {
-		color = lipgloss.Color("#FFD700") // Yellow
+		c = lipgloss.Color("#FFD700") // Yellow
 	} else {
-		color = lipgloss.Color("#51CF66") // Green
+		c = lipgloss.Color("#51CF66") // Green
 	}
 
 	return lipgloss.NewStyle().
-		Foreground(color).
+		Foreground(c).
 		Render(bar)
 }

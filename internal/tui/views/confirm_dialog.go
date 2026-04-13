@@ -3,8 +3,8 @@ package views
 import (
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 )
 
 // ConfirmDialogModel is a yes/no confirmation dialog
@@ -35,7 +35,7 @@ func (m *ConfirmDialogModel) Init() tea.Cmd {
 
 func (m *ConfirmDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		switch msg.String() {
 		case "y", "enter":
 			return m, func() tea.Msg {
@@ -55,7 +55,7 @@ func (m *ConfirmDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m *ConfirmDialogModel) View() string {
+func (m *ConfirmDialogModel) View() tea.View {
 	var sb strings.Builder
 
 	sb.WriteString(m.title)
@@ -66,12 +66,11 @@ func (m *ConfirmDialogModel) View() string {
 
 	content := StyleBorderBox.Render(sb.String())
 
-	// Center on screen
-	return lipgloss.Place(
+	return tea.NewView(lipgloss.Place(
 		m.width,
 		m.height,
 		lipgloss.Center,
 		lipgloss.Center,
 		content,
-	)
+	))
 }

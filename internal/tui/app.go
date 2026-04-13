@@ -1,7 +1,8 @@
 package tui
 
 import (
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
+
 	"github.com/aidev/cli/internal/api"
 	"github.com/aidev/cli/internal/auth"
 	"github.com/aidev/cli/internal/models"
@@ -156,20 +157,29 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // View renders the current screen
-func (m *AppModel) View() string {
+func (m *AppModel) View() tea.View {
+	var content string
 	switch m.screen {
 	case ScreenLogin:
 		if m.loginView != nil {
-			return m.loginView.View()
+			content = m.loginView.View().Content
+		} else {
+			content = "Loading..."
 		}
-		return "Loading..."
 	case ScreenMain:
 		if m.mainView != nil {
-			return m.mainView.View()
+			content = m.mainView.View().Content
+		} else {
+			content = "Loading..."
 		}
-		return "Loading..."
+	default:
+		content = "Unknown screen"
 	}
-	return "Unknown screen"
+
+	return tea.View{
+		AltScreen: true,
+		Content:   content,
+	}
 }
 
 // Private handlers
